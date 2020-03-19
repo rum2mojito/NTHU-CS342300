@@ -83,6 +83,13 @@ void hw_exit(void)
 				  \r \\____/\\/   \\/\\___/  \\_/  \n \
 				  ";
 	printk(buf_info, exit);
+	
+	student_t *tmp_s, *_tmp_s;
+	list_for_each_entry_safe(tmp_s, _tmp_s, &class, node_student) {
+		list_del(&tmp_s->node_student);
+		kfree(tmp_s->birthday);
+		kfree(tmp_s);
+	}
 
 	printk(KERN_INFO "remove module\n");
 }
