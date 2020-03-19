@@ -75,6 +75,15 @@ int hw_init(void)
 
 void hw_exit(void)
 {
+	char *exit = "\r  _______   _______ _____ \n \
+				  \r |  ___\\ \\ / /_   _|_   _|\n \
+				  \r | |__  \\ V /  | |   | |  \n \
+				  \r |  __| /   \\  | |   | |  \n \
+				  \r | |___/ /^\\ \\_| |_  | |  \n \
+				  \r \\____/\\/   \\/\\___/  \\_/  \n \
+				  ";
+	printk(buf_info, exit);
+
 	printk(KERN_INFO "remove module\n");
 }
 
