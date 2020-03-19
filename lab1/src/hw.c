@@ -38,10 +38,19 @@ student_t *construct_student(const int id, const char* birthday)
 }
 
 struct list_head class;
+char buf_info[] = KERN_INFO " %s";
 
 // init function
 int hw_init(void)
 {
+	char *welcome = "\n\r _   _  _____ _      _     _____ \n \
+					 \r| | | ||  ___| |    | |   |  _  |\n \
+					 \r| |_| || |__ | |    | |   | | | |\n \
+					 \r|  _  ||  __|| |    | |   | | | |\n \
+					 \r| | | || |___| |____| |___\\ \\_/ /\n \
+					 \r\\_| |_/\\____/\\_____/\\_____/\\___/ \n \
+					 ";
+	printk(buf_info, welcome);	
 	// init list head
 	INIT_LIST_HEAD(&class);
 	
