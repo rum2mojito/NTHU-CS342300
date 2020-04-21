@@ -1,16 +1,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <time.h>
 
-typedef struct _merge_sort_arg {
+typedef struct _merge_sort_arg_t {
     int i;
     int j;
-    int a[];
-    int aux[];
-} merge_sort_arg;
+    int *a;
+} merge_sort_arg_t;
+
+// typedef struct _merge_arg_t {
+//     int i;
+//     int j;
+//     int m;
+//     int *a;
+// } merge_arg_t;
 
 void merge_sort_entry(void *data);
-void merge_sort(int i, int j, int a[], int aux[]);
+void merge_sort(int *arr, int l, int r);
+void merge(int *arr, int l, int m, int r);
 
 int main(int argc, char* argv[]) {
     printf("%d\n", argc);
@@ -25,58 +33,117 @@ int main(int argc, char* argv[]) {
     }
 
     pthread_t left_t, right_t, merge_t;
-
-    // read data
     int input_data[10000];
-    int aux[10000];
-    int input_data_size = 0;
-    char c;
-        
-    for(int i=0; (!feof (in_file) && c != '\n' && c != '\r'); i++) {
-        fscanf (in_file, "%d%c", &input_data[i], &c);
-        input_data_size++;
-    }
+    int input_data_size;
+    int fscanf_return = 0;
 
-    int mid = input_data_size/2;
-    merge_sort_arg left_arg, right_arg;
-    left_arg.i = 0;
-    left_arg.j = mid;
-    left_arg.a = input_data;
-    left_arg.aux = aux;
-    pthread_create(&left_t, NULL, merge_sort_entry, (void*) &left_arg);
+    for(int m=1; !feof (in_file); m++) {
+        printf("line %d\n", m);
+        // read data
+        input_data_size = 0;
+        char c = '0';
+        int err_l, err_r;
+        for(int i=0; (!feof (in_file) && c != '\n' && c != '\r'); i++) {
+            fscanf_return = fscanf(in_file, "%d%c", &input_data[i], &c);
+            if(fscanf_return < 2) break;
+            input_data_size++;
+        }
 
-    right_arg.i = mid;
-    right_arg.j = input_data_size;
-    right_arg.a = input_data;
-    right_arg.aux = aux;
-    pthread_create(&right_t, NULL, merge_sort_entry, (void*) &right_arg);
+        // int *a;
+        // a = input_data;
+        // for(int i=0; i<input_data_size; i++) {
+        //     printf("%d\n", *(a+i));
+        // }
 
-    // print data
-    for(int i=0; i<input_data_size; i++) {
-        printf("%d\n", input_data[i]);
+        int mid = input_data_size/2;
+        merge_sort_arg_t left_arg, right_arg;
+        left_arg.i = 0;
+        left_arg.j = mid;
+        left_arg.a = input_data;
+        err_l = pthread_create(&left_t, NULL, merge_sort_entry, &left_arg);
+
+        right_arg.i = mid+1;
+        right_arg.j = input_data_size-1;
+        right_arg.a = input_data;
+        err_r = pthread_create(&right_t, NULL, merge_sort_entry, &right_arg);
+
+        if(err_l != 0 && err_r != 0) {
+            printf("ERROR return code from pthread_create()\n");
+        }
+        pthread_join(left_t, NULL);
+        pthread_join(right_t, NULL);
+
+        merge(input_data, 0, mid, input_data_size-1);
+
+        // print data
+        for(int i=0; i<input_data_size; i++) {
+            printf("%d\n", input_data[i]);
+        }
     }
     
     fclose (in_file);
 }
 
 void merge_sort_entry(void *data) {
+    // printf("Thread ID is: %ld\n", (long) pthread_self());
     // convert parameter type
-    merge_sort_arg arg = (merge_sort_arg*) data;
-    merge_sort(arg.i, arg.j, &arg.a, &arg.aux);
+    merge_sort_arg_t *arg = (merge_sort_arg_t*) data;
+    
+    merge_sort(arg->a, arg->i, arg->j);
 }
 
-void merge_sort(int i, int j, int a[], int aux[]) {
+void merge_sort(int *arr, int l, int r) {
+    
     // check boundary
-    if(j >= i) return;
+    if(l >= r) return;
 
-    int mid = (i+j)/2;
+    int m = l + (r-l)/2;
 
-    merge_sort(i, mid, a, aux);
-    merge_sort(mid, j, a, aux);
+    merge_sort(arr, l, m);
+    merge_sort(arr, m+1, r);
 
-    int pointer_left = i;
-    int pointer_right = mid+1;
-    int k;
+    merge(arr, l, m, r);
+}
 
+void merge(int *arr, int l, int m, int r) {
+    // printf("merge\n");
+    int i, j, k;
+    int n1 = m-l+1;
+    int n2 = r-m;
 
+    int L[n1], R[n2];
+
+    for(i=0; i<n1; i++) {
+        L[i] = *(arr+l+i);
+    }
+    for(j=0; j<n2; j++) {
+        R[j] = *(arr+m+1+j);
+    }
+
+    i = 0;
+    j = 0;
+    k = l;
+
+    while(i<n1 && j<n2) {
+        if(L[i] <= R[j]) {
+            *(arr+k) = L[i];
+            i++;
+        } else {
+            *(arr+k) = R[j];
+            j++;
+        }
+        k++;
+    }
+
+    // copy the remaining part
+    while(i<n1) {
+        *(arr+k) = L[i];
+        i++;
+        k++;
+    }
+    while(j<n2) {
+        *(arr+k) = R[j];
+        j++;
+        k++;
+    }
 }
