@@ -9,20 +9,11 @@ typedef struct _merge_sort_arg_t {
     int *a;
 } merge_sort_arg_t;
 
-// typedef struct _merge_arg_t {
-//     int i;
-//     int j;
-//     int m;
-//     int *a;
-// } merge_arg_t;
-
 void merge_sort_entry(void *data);
 void merge_sort(int *arr, int l, int r);
 void merge(int *arr, int l, int m, int r);
 
 int main(int argc, char* argv[]) {
-    printf("%d\n", argc);
-
     FILE *in_file  = fopen(argv[1], "r");
     FILE *out_file = fopen(argv[2], "w");
 
@@ -43,17 +34,15 @@ int main(int argc, char* argv[]) {
         input_data_size = 0;
         char c = '0';
         int err_l, err_r;
+        clock_t begin = clock();
+
         for(int i=0; (!feof (in_file) && c != '\n' && c != '\r'); i++) {
             fscanf_return = fscanf(in_file, "%d%c", &input_data[i], &c);
             if(fscanf_return < 2) break;
             input_data_size++;
         }
 
-        // int *a;
-        // a = input_data;
-        // for(int i=0; i<input_data_size; i++) {
-        //     printf("%d\n", *(a+i));
-        // }
+        if(input_data_size == 0) continue;
 
         int mid = input_data_size/2;
         merge_sort_arg_t left_arg, right_arg;
@@ -77,15 +66,20 @@ int main(int argc, char* argv[]) {
 
         // print data
         for(int i=0; i<input_data_size; i++) {
-            printf("%d\n", input_data[i]);
+            fprintf(out_file, "%d ", input_data[i]);
         }
+        fprintf(out_file, "\r");
+
+        clock_t end = clock();
+        double duration = end - begin;
+        fprintf(out_file, "duration:%f\r\r", duration / CLOCKS_PER_SEC);
     }
     
     fclose (in_file);
+    fclose(out_file);
 }
 
 void merge_sort_entry(void *data) {
-    // printf("Thread ID is: %ld\n", (long) pthread_self());
     // convert parameter type
     merge_sort_arg_t *arg = (merge_sort_arg_t*) data;
     
@@ -93,7 +87,6 @@ void merge_sort_entry(void *data) {
 }
 
 void merge_sort(int *arr, int l, int r) {
-    
     // check boundary
     if(l >= r) return;
 
