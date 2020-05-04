@@ -37,9 +37,14 @@ err_l = pthread_create(&left_t, NULL, merge_sort_entry, &left_arg);
 pthread_join(left_t, NULL);
 pthread_join(right_t, NULL);
 
-merge(input_data, 0, mid, input_data_size-1);
+merge_struct merge_arg = {input_data, 0, mid, input_data_size-1};
+err_m = pthread_create(&merge_t, NULL, merge_entry, &merge_arg);
+if(err_l != 0 || err_r != 0) {
+    printf("ERROR return code from merge pthread_create()\n");
+}
+pthread_join(merge_t, NULL);
 ```
-> 使用`pthread_join()`讓main thread等待左右兩個threads完成sorting，完成兩部份sorting後，用main thread執行`merge()`合併左右兩個部分．
+> 使用`pthread_join()`讓main thread等待左右兩個threads完成sorting，完成兩部份sorting後，用merge thread執行`merge_entry()`合併左右兩個部分．
 
 #### Merge Sort
 ```c
@@ -115,7 +120,7 @@ void merge(int *arr, int l, int m, int r) {
 ## Appendix - source code
 #### Makefile
 
-```makefile
+```
 CC := gcc
 OPS := -pthread
 TARGET := hw3.c
@@ -148,7 +153,16 @@ typedef struct _merge_sort_arg_t {
     int *a;
 } merge_sort_arg_t;
 
+// merge(input_data, 0, mid, input_data_size-1);
+typedef struct _merge_struct {
+    int *input_data;
+    int start;
+    int mid;
+    int end;
+} merge_struct;
+
 void merge_sort_entry(void *data);
+void merge_entry(void *data);
 void merge_sort(int *arr, int l, int r);
 void merge(int *arr, int l, int m, int r);
 
@@ -162,7 +176,7 @@ int main(int argc, char* argv[]) {
         exit(-1);
     }
 
-    pthread_t left_t, right_t;
+    pthread_t left_t, right_t, merge_t;
     int input_data[10000];
     int input_data_size;
     int fscanf_return = 0;
@@ -172,7 +186,7 @@ int main(int argc, char* argv[]) {
         // read data
         input_data_size = 0;
         char c = '0';
-        int err_l, err_r;
+        int err_l, err_r, err_m;
         clock_t begin = clock();
 
         for(int i=0; (!feof (in_file) && c != '\n' && c != '\r'); i++) {
@@ -185,6 +199,7 @@ int main(int argc, char* argv[]) {
 
         int mid = input_data_size/2;
         merge_sort_arg_t left_arg, right_arg;
+        
         left_arg.i = 0;
         left_arg.j = mid;
         left_arg.a = input_data;
@@ -195,23 +210,29 @@ int main(int argc, char* argv[]) {
         right_arg.a = input_data;
         err_r = pthread_create(&right_t, NULL, merge_sort_entry, &right_arg);
 
-        if(err_l != 0 && err_r != 0) {
+        if(err_l != 0 || err_r != 0) {
             printf("ERROR return code from pthread_create()\n");
         }
         pthread_join(left_t, NULL);
         pthread_join(right_t, NULL);
 
-        merge(input_data, 0, mid, input_data_size-1);
+        merge_struct merge_arg = {input_data, 0, mid, input_data_size-1};
+        err_m = pthread_create(&merge_t, NULL, merge_entry, &merge_arg);
+        if(err_l != 0 || err_r != 0) {
+            printf("ERROR return code from merge pthread_create()\n");
+        }
+        pthread_join(merge_t, NULL);
+        // merge(input_data, 0, mid, input_data_size-1);
 
         // print data
         for(int i=0; i<input_data_size; i++) {
             fprintf(out_file, "%d ", input_data[i]);
         }
-        fprintf(out_file, "\r");
+        fprintf(out_file, "\n");
 
         clock_t end = clock();
         double duration = end - begin;
-        fprintf(out_file, "duration:%f\r\r", duration / CLOCKS_PER_SEC);
+        fprintf(out_file, "duration:%f\n\n", duration / CLOCKS_PER_SEC);
     }
     
     fclose (in_file);
@@ -223,6 +244,12 @@ void merge_sort_entry(void *data) {
     merge_sort_arg_t *arg = (merge_sort_arg_t*) data;
     
     merge_sort(arg->a, arg->i, arg->j);
+}
+
+void merge_entry(void *data) {
+    merge_struct *arg = (merge_struct*) data;
+
+    merge(arg->input_data, arg->start, arg->mid, arg->end);
 }
 
 void merge_sort(int *arr, int l, int r) {
@@ -279,6 +306,7 @@ void merge(int *arr, int l, int m, int r) {
         k++;
     }
 }
+
 ```
 
 #### testcase.txt
