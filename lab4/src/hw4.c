@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 #define P_NUM 5
-#define LEFT (philosopher_number + 4) % P_NUM
+#define LEFT (philosopher_number + P_NUM - 1) % P_NUM
 #define RIGHT (philosopher_number + 1) % P_NUM
 
 typedef enum state { THINKING, HUNGRY, EATING } state_t;
@@ -19,9 +19,9 @@ void hw4_init();
 void philosopher(void *philosopher_number_p);
 void pick_up_fork(int philosopher_number);
 void return_fork(int philosopher_number);
-void test(int philosopher_number);
 void think(int philosopher_number);
 void eat(int philosopher_number);
+int test(int philosopher_number);
 
 int main() {
   hw4_init();
@@ -66,11 +66,14 @@ void pick_up_fork(int philosopher_number) {
   pthread_mutex_unlock(&mutex);
 
   // testing
-  test(philosopher_number);
+  int flag = test(philosopher_number);
+  if (flag == 0) {
+    printf("Philosopher %d can’t pick up forks and start waiting.\n",
+           philosopher_number);
+  }
   pthread_mutex_lock(&mutex);
-  if (p_state[philosopher_number] != HUNGRY) {
-    pthread_cond_wait(&cond_var[LEFT], &mutex);
-    pthread_cond_wait(&cond_var[RIGHT], &mutex);
+  if (p_state[philosopher_number] != EATING) {
+    pthread_cond_wait(&cond_var[philosopher_number], &mutex);
   }
   pthread_mutex_unlock(&mutex);
 }
@@ -78,9 +81,22 @@ void pick_up_fork(int philosopher_number) {
 void return_fork(int philosopher_number) {
   printf("Philosopher %d returns forks and then starts TESTING %d and %d.\n",
          philosopher_number, LEFT, RIGHT);
+  pthread_mutex_lock(&mutex);
+  p_state[philosopher_number] = THINKING;
+  test(LEFT);
+  test(RIGHT);
+  pthread_mutex_unlock(&mutex);
 }
 
-void test(int philosopher_number) {}
+int test(int philosopher_number) {
+  if (p_state[philosopher_number] == HUNGRY && p_state[LEFT] != EATING &&
+      p_state[RIGHT] != EATING) {
+    p_state[philosopher_number] = EATING;
+    pthread_cond_signal(&cond_var[philosopher_number]);
+    return 1;
+  }
+  return 0;
+}
 
 void think(int philosopher_number) {
   int thinking_time = (rand() % 3) + 1;
