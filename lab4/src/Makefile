@@ -16,4 +16,4 @@ clean:
 	rm *.o
 
 style:
-	git clang-format-6.0 --style file --diff --extensions c,h
+	clang-format-6.0 -style=google -i *.c
