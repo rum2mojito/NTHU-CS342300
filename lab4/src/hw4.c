@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <pthread.h>
+#include "hw4.h"
 
 int main()
 {
