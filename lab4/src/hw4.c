@@ -30,7 +30,6 @@ int main() {
 }
 
 void hw4_init() {
-  printf("HW4 INIT...\r\n");
   pthread_mutex_init(&mutex, NULL);
   for (int i = 0; i < 5; i++) {
     pthread_cond_init(&cond_var[i], NULL);
