@@ -1,120 +1,149 @@
-# OS HW3 Multithread Programming
+# OS HW4 Dining Philosophers Problem
 > 石育瑋 108062633
 
 ## Implementation
-#### Parameters Structure
+#### Definition
 ```c
-typedef struct _merge_sort_arg_t {
-    int i;
-    int j;
-    int *a;
-} merge_sort_arg_t;
+#define P_NUM 5
+#define LEFT (philosopher_number + P_NUM - 1) % P_NUM
+#define RIGHT (philosopher_number + 1) % P_NUM
 ```
-> 因為thread執行目標function需要傳遞參數，所以創建一個structure，裡面包含sorting起始位置`i` 結束位置`j` 以及需要sorting的array `a`．
+> `P_NUM`為philosopher總人數
+> `LEFT`為當前philosopher左邊的人
+>`RIGHT`為當前philosopher右邊的人
+
+#### Global variables
+```c
+state_t p_state[5] = {THINKING, THINKING, THINKING, THINKING, THINKING};
+pthread_mutex_t mutex;
+pthread_cond_t cond_var[5];
+pthread_t p[5];
+int arg[5] = {0, 1, 2, 3, 4};
+```
+> `p_state`紀錄philosopher狀態
+> `mutex`控制state[]只能由一個thread去改變狀態
+> `cond_var`控制philosopher是否可吃飯
+> `p[5]` thread pool
+> `arg[5]`紀錄philosopher number
+
+#### Initialization
+```c
+void hw4_init() {
+  pthread_mutex_init(&mutex, NULL);
+  for (int i = 0; i < 5; i++) {
+    pthread_cond_init(&cond_var[i], NULL);
+  }
+
+  for (int i = 0; i < 5; i++) {
+    pthread_create(&p[i], NULL, philosopher, &arg[i]);
+  }
+
+  for (int i = 0; i < 5; i++) {
+    pthread_join(p[i], NULL);
+  }
+}
+```
+> 初始化`mutex`與`cond_var`，並讓thread pool執行philosopher function．
 
 #### Thread Entry Function
 ```c
-void merge_sort_entry(void *data) {
-    // convert parameter type
-    merge_sort_arg_t *arg = (merge_sort_arg_t*) data;
-    
-    merge_sort(arg->a, arg->i, arg->j);
+void philosopher(void *philosopher_number_p) {
+  int philosopher_number = *(int *)philosopher_number_p;
+  // thinking
+  think(philosopher_number);
+  // hungry
+  pick_up_fork(philosopher_number);
+  // eating
+  eat(philosopher_number);
+  // end eating
+  return_fork(philosopher_number);
 }
 ```
-> 先轉換輸入structure type，再去執行真正想要執行的function `merge_sort()`．
-#### Thread Creation
+> 轉換輸入參數為int類型，並依序執行philosopher每個狀態函數（思考，餓肚子，吃飯，吃飽）
+
+#### Thinking
 ```c
-merge_sort_arg_t left_arg, right_arg;
-left_arg.i = 0;
-left_arg.j = mid;
-left_arg.a = input_data;
-err_l = pthread_create(&left_t, NULL, merge_sort_entry, &left_arg);
+void think(int philosopher_number) {
+  int thinking_time = (rand() % 3) + 1;
+  printf("Philosopher %d is now THINKING for %d seconds.\n", philosopher_number, thinking_time);
+  sleep(thinking_time);
+}
 ```
-> (上以左thread為例)分別創建merge sort左右兩個threads所需要傳遞parameters的structure，並初始化structure裡的variables，再使用pthread.h提供的`pthread_create()`讓thread去執行指定的function．
+> 思考時間為隨機1~3秒
 
-#### Merge Result
+#### pick_up_fork
 ```c
-pthread_join(left_t, NULL);
-pthread_join(right_t, NULL);
+void pick_up_fork(int philosopher_number) {
+  printf("Philosopher %d is now HUNGRY and trying to pick up forks.\n",
+         philosopher_number);
+  // set philosopher state
+  pthread_mutex_lock(&mutex);
+  p_state[philosopher_number] = HUNGRY;
+  pthread_mutex_unlock(&mutex);
 
-merge_struct merge_arg = {input_data, 0, mid, input_data_size-1};
-err_m = pthread_create(&merge_t, NULL, merge_entry, &merge_arg);
-if(err_l != 0 || err_r != 0) {
-    printf("ERROR return code from merge pthread_create()\n");
+  // testing
+  int flag = test(philosopher_number);
+  if (flag == 0) {
+    printf("Philosopher %d can’t pick up forks and start waiting.\n",
+           philosopher_number);
+  }
+  pthread_mutex_lock(&mutex);
+  if (p_state[philosopher_number] != EATING) {
+    pthread_cond_wait(&cond_var[philosopher_number], &mutex);
+  }
+  pthread_mutex_unlock(&mutex);
 }
-pthread_join(merge_t, NULL);
 ```
-> 使用`pthread_join()`讓main thread等待左右兩個threads完成sorting，完成兩部份sorting後，用merge thread執行`merge_entry()`合併左右兩個部分．
+> 拿到mutex切換philosopher狀態為`HUNGRY`，再測試左右叉子是否空閒
 
-#### Merge Sort
+#### test
 ```c
-void merge_sort(int *arr, int l, int r) {
-    // check boundary
-    if(l >= r) return;
-
-    int m = l + (r-l)/2;
-
-    merge_sort(arr, l, m);
-    merge_sort(arr, m+1, r);
-
-    merge(arr, l, m, r);
-}
-
-void merge(int *arr, int l, int m, int r) {
-    // printf("merge\n");
-    int i, j, k;
-    int n1 = m-l+1;
-    int n2 = r-m;
-
-    int L[n1], R[n2];
-
-    for(i=0; i<n1; i++) {
-        L[i] = *(arr+l+i);
-    }
-    for(j=0; j<n2; j++) {
-        R[j] = *(arr+m+1+j);
-    }
-
-    i = 0;
-    j = 0;
-    k = l;
-
-    while(i<n1 && j<n2) {
-        if(L[i] <= R[j]) {
-            *(arr+k) = L[i];
-            i++;
-        } else {
-            *(arr+k) = R[j];
-            j++;
-        }
-        k++;
-    }
-
-    // copy the remaining part
-    while(i<n1) {
-        *(arr+k) = L[i];
-        i++;
-        k++;
-    }
-    while(j<n2) {
-        *(arr+k) = R[j];
-        j++;
-        k++;
-    }
+int test(int philosopher_number) {
+  if (p_state[philosopher_number] == HUNGRY && p_state[LEFT] != EATING &&
+      p_state[RIGHT] != EATING) {
+    p_state[philosopher_number] = EATING;
+    pthread_cond_signal(&cond_var[philosopher_number]);
+    return 1;
+  }
+  return 0;
 }
 ```
-> 上面的code就是一般merge sort的implementation
+> 測試左右有沒有人在吃飯，若沒有在吃飯，則代表左右叉子空閒，當前philosopher可以吃飯，發出signal，並return 1；若不能吃飯則return 0．
+
+#### eat
+```c
+void eat(int philosopher_number) {
+  printf("Philosopher %d is now EATING.\n", philosopher_number);
+  int eating_time = (rand() % 3) + 1;
+  sleep(eating_time);
+}
+```
+> 隨機1~3秒去模擬吃飯
+
+#### return_fork
+```c
+void return_fork(int philosopher_number) {
+  printf("Philosopher %d returns forks and then starts TESTING %d and %d.\n",
+         philosopher_number, LEFT, RIGHT);
+  pthread_mutex_lock(&mutex);
+  p_state[philosopher_number] = THINKING;
+  test(LEFT);
+  test(RIGHT);
+  pthread_mutex_unlock(&mutex);
+}
+```
+> 吃飽了歸還叉子，設定自己的state為`THINKING`，並去測試左右兩位philosophers能否吃飯．
 
 
 ## Result
 
-> 用助教提供的`testcase.txt`執行結果如下：
+> 執行結果如下：
 
 [![hw2.md.png](https://imgshare.io/images/2020/04/13/hw2.md.png)](https://imgshare.io/image/4UEKd)
 
 ## Reference
-1. https://www.techiedelight.com/find-execution-time-c-program/
-2. https://www.edureka.co/blog/merge-sort-in-c/
+1. https://blog.csdn.net/chengonghao/article/details/51779279?utm_medium=distribute.pc_relevant.none-task-blog-baidujs-4
+2. https://blog.csdn.net/hairetz/article/details/4535920
 3. http://blog.gitdns.org/2016/12/06/pthread/
  
 ## Appendix - source code
@@ -123,218 +152,164 @@ void merge(int *arr, int l, int m, int r) {
 ```
 CC := gcc
 OPS := -pthread
-TARGET := hw3.c
+TARGET := hw4.c
 
-all: hw3.o
+all: hw4.o
 
-.PHONY: clean all run
+.PHONY: clean all run style
 
-hw3.o: $(TARGET)
+hw4.o: $(TARGET)
 	$(CC) $< $(OPS) -o $@
 
 run:
-	./hw3.o ../data/testcase.txt output.txt
+	./hw4.o
 
 clean:
-	rm *.o output.txt
+	rm *.o
+
+style:
+	clang-format-6.0 -style=google -i *.c
 ```
     
-#### hw3.c
+#### hw4.c
 
 ```c
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
-#include <time.h>
+#include <unistd.h>
 
-typedef struct _merge_sort_arg_t {
-    int i;
-    int j;
-    int *a;
-} merge_sort_arg_t;
+#define P_NUM 5
+#define LEFT (philosopher_number + P_NUM - 1) % P_NUM
+#define RIGHT (philosopher_number + 1) % P_NUM
 
-// merge(input_data, 0, mid, input_data_size-1);
-typedef struct _merge_struct {
-    int *input_data;
-    int start;
-    int mid;
-    int end;
-} merge_struct;
+typedef enum state { THINKING, HUNGRY, EATING } state_t;
 
-void merge_sort_entry(void *data);
-void merge_entry(void *data);
-void merge_sort(int *arr, int l, int r);
-void merge(int *arr, int l, int m, int r);
+state_t p_state[5] = {THINKING, THINKING, THINKING, THINKING, THINKING};
+pthread_mutex_t mutex;
+pthread_cond_t cond_var[5];
+pthread_t p[5];
+int arg[5] = {0, 1, 2, 3, 4};
 
-int main(int argc, char* argv[]) {
-    FILE *in_file  = fopen(argv[1], "r");
-    FILE *out_file = fopen(argv[2], "w");
+void hw4_init();
+void philosopher(void *philosopher_number_p);
+void pick_up_fork(int philosopher_number);
+void return_fork(int philosopher_number);
+void think(int philosopher_number);
+void eat(int philosopher_number);
+int test(int philosopher_number);
 
-    // check file
-    if (in_file == NULL) {   
-        printf("Error! Could not open input file.\n"); 
-        exit(-1);
-    }
+int main() {
+  hw4_init();
 
-    pthread_t left_t, right_t, merge_t;
-    int input_data[10000];
-    int input_data_size;
-    int fscanf_return = 0;
-
-    for(int m=1; !feof (in_file); m++) {
-        printf("line %d\n", m);
-        // read data
-        input_data_size = 0;
-        char c = '0';
-        int err_l, err_r, err_m;
-        clock_t begin = clock();
-
-        for(int i=0; (!feof (in_file) && c != '\n' && c != '\r'); i++) {
-            fscanf_return = fscanf(in_file, "%d%c", &input_data[i], &c);
-            if(fscanf_return < 2) break;
-            input_data_size++;
-        }
-
-        if(input_data_size == 0) continue;
-
-        int mid = input_data_size/2;
-        merge_sort_arg_t left_arg, right_arg;
-        
-        left_arg.i = 0;
-        left_arg.j = mid;
-        left_arg.a = input_data;
-        err_l = pthread_create(&left_t, NULL, merge_sort_entry, &left_arg);
-
-        right_arg.i = mid+1;
-        right_arg.j = input_data_size-1;
-        right_arg.a = input_data;
-        err_r = pthread_create(&right_t, NULL, merge_sort_entry, &right_arg);
-
-        if(err_l != 0 || err_r != 0) {
-            printf("ERROR return code from pthread_create()\n");
-        }
-        pthread_join(left_t, NULL);
-        pthread_join(right_t, NULL);
-
-        merge_struct merge_arg = {input_data, 0, mid, input_data_size-1};
-        err_m = pthread_create(&merge_t, NULL, merge_entry, &merge_arg);
-        if(err_l != 0 || err_r != 0) {
-            printf("ERROR return code from merge pthread_create()\n");
-        }
-        pthread_join(merge_t, NULL);
-        // merge(input_data, 0, mid, input_data_size-1);
-
-        // print data
-        for(int i=0; i<input_data_size; i++) {
-            fprintf(out_file, "%d ", input_data[i]);
-        }
-        fprintf(out_file, "\n");
-
-        clock_t end = clock();
-        double duration = end - begin;
-        fprintf(out_file, "duration:%f\n\n", duration / CLOCKS_PER_SEC);
-    }
-    
-    fclose (in_file);
-    fclose(out_file);
+  return 0;
 }
 
-void merge_sort_entry(void *data) {
-    // convert parameter type
-    merge_sort_arg_t *arg = (merge_sort_arg_t*) data;
-    
-    merge_sort(arg->a, arg->i, arg->j);
+void hw4_init() {
+  pthread_mutex_init(&mutex, NULL);
+  for (int i = 0; i < 5; i++) {
+    pthread_cond_init(&cond_var[i], NULL);
+  }
+
+  for (int i = 0; i < 5; i++) {
+    pthread_create(&p[i], NULL, philosopher, &arg[i]);
+  }
+
+  for (int i = 0; i < 5; i++) {
+    pthread_join(p[i], NULL);
+  }
 }
 
-void merge_entry(void *data) {
-    merge_struct *arg = (merge_struct*) data;
-
-    merge(arg->input_data, arg->start, arg->mid, arg->end);
+void philosopher(void *philosopher_number_p) {
+  int philosopher_number = *(int *)philosopher_number_p;
+  // thinking
+  think(philosopher_number);
+  // hungry
+  pick_up_fork(philosopher_number);
+  // eating
+  eat(philosopher_number);
+  // end eating
+  return_fork(philosopher_number);
 }
 
-void merge_sort(int *arr, int l, int r) {
-    // check boundary
-    if(l >= r) return;
+void pick_up_fork(int philosopher_number) {
+  printf("Philosopher %d is now HUNGRY and trying to pick up forks.\n",
+         philosopher_number);
+  // set philosopher state
+  pthread_mutex_lock(&mutex);
+  p_state[philosopher_number] = HUNGRY;
+  pthread_mutex_unlock(&mutex);
 
-    int m = l + (r-l)/2;
-
-    merge_sort(arr, l, m);
-    merge_sort(arr, m+1, r);
-
-    merge(arr, l, m, r);
+  // testing
+  int flag = test(philosopher_number);
+  if (flag == 0) {
+    printf("Philosopher %d can’t pick up forks and start waiting.\n",
+           philosopher_number);
+  }
+  pthread_mutex_lock(&mutex);
+  if (p_state[philosopher_number] != EATING) {
+    pthread_cond_wait(&cond_var[philosopher_number], &mutex);
+  }
+  pthread_mutex_unlock(&mutex);
 }
 
-void merge(int *arr, int l, int m, int r) {
-    // printf("merge\n");
-    int i, j, k;
-    int n1 = m-l+1;
-    int n2 = r-m;
-
-    int L[n1], R[n2];
-
-    for(i=0; i<n1; i++) {
-        L[i] = *(arr+l+i);
-    }
-    for(j=0; j<n2; j++) {
-        R[j] = *(arr+m+1+j);
-    }
-
-    i = 0;
-    j = 0;
-    k = l;
-
-    while(i<n1 && j<n2) {
-        if(L[i] <= R[j]) {
-            *(arr+k) = L[i];
-            i++;
-        } else {
-            *(arr+k) = R[j];
-            j++;
-        }
-        k++;
-    }
-
-    // copy the remaining part
-    while(i<n1) {
-        *(arr+k) = L[i];
-        i++;
-        k++;
-    }
-    while(j<n2) {
-        *(arr+k) = R[j];
-        j++;
-        k++;
-    }
+void return_fork(int philosopher_number) {
+  printf("Philosopher %d returns forks and then starts TESTING %d and %d.\n",
+         philosopher_number, LEFT, RIGHT);
+  pthread_mutex_lock(&mutex);
+  p_state[philosopher_number] = THINKING;
+  test(LEFT);
+  test(RIGHT);
+  pthread_mutex_unlock(&mutex);
 }
 
+int test(int philosopher_number) {
+  if (p_state[philosopher_number] == HUNGRY && p_state[LEFT] != EATING &&
+      p_state[RIGHT] != EATING) {
+    p_state[philosopher_number] = EATING;
+    pthread_cond_signal(&cond_var[philosopher_number]);
+    return 1;
+  }
+  return 0;
+}
+
+void think(int philosopher_number) {
+  int thinking_time = (rand() % 3) + 1;
+  printf("Philosopher %d is now THINKING for %d seconds.\n", philosopher_number,
+         thinking_time);
+  sleep(thinking_time);
+}
+
+void eat(int philosopher_number) {
+  printf("Philosopher %d is now EATING.\n", philosopher_number);
+  int eating_time = (rand() % 3) + 1;
+  sleep(eating_time);
+}
 ```
 
-#### testcase.txt
+#### stdout
 ```
-5 132 89 45 76 21 1 59 88 11 32 77
-536 211 489 500 17 0 79
-32 18 2 63 34 27 1659
-74 73 1985 512 74 210 156 4 18 1
-12541 151412 123 8512 5563 563
-
-```
-
-#### output.txt
-```
-1 5 11 21 32 45 59 76 77 88 89 132 
-duration:0.000176
-
-0 17 79 211 489 500 536 
-duration:0.000054
-
-2 18 27 32 34 63 1659 
-duration:0.000027
-
-1 4 18 73 74 74 156 210 512 1985 
-duration:0.000042
-
-123 563 5563 8512 12541 151412 
-duration:0.000043
-
-
+Philosopher 4 is now THINKING for 2 seconds.
+Philosopher 3 is now THINKING for 2 seconds.
+Philosopher 2 is now THINKING for 1 seconds.
+Philosopher 1 is now THINKING for 2 seconds.
+Philosopher 0 is now THINKING for 3 seconds.
+Philosopher 2 is now HUNGRY and trying to pick up forks.
+Philosopher 2 is now EATING.
+Philosopher 4 is now HUNGRY and trying to pick up forks.
+Philosopher 4 is now EATING.
+Philosopher 3 is now HUNGRY and trying to pick up forks.
+Philosopher 3 can’t pick up forks and start waiting.
+Philosopher 1 is now HUNGRY and trying to pick up forks.
+Philosopher 1 can’t pick up forks and start waiting.
+Philosopher 2 returns forks and then starts TESTING 1 and 3.
+Philosopher 1 is now EATING.
+Philosopher 0 is now HUNGRY and trying to pick up forks.
+Philosopher 0 can’t pick up forks and start waiting.
+Philosopher 4 returns forks and then starts TESTING 3 and 0.
+Philosopher 3 is now EATING.
+Philosopher 1 returns forks and then starts TESTING 0 and 2.
+Philosopher 0 is now EATING.
+Philosopher 3 returns forks and then starts TESTING 2 and 4.
+Philosopher 0 returns forks and then starts TESTING 4 and 1.
 ```
