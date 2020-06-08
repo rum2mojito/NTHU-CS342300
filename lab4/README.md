@@ -171,7 +171,7 @@ style:
 	clang-format-6.0 -style=google -i *.c
 ```
     
-#### hw3.c
+#### hw4.c
 
 ```c
 #include <pthread.h>
